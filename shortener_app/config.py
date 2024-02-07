@@ -1,4 +1,4 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings,SettingsConfigDict
 from functools import lru_cache
 
 class Settings(BaseSettings):
@@ -6,6 +6,8 @@ class Settings(BaseSettings):
     base_url:str ="http://localhost:8000"
     db_url:str ="sqlite:///./shortener.db"
     app_name: str = "Shortener API"
+    
+    model_config = SettingsConfigDict(env_file=".env")
 
 @lru_cache
 def get_settings() -> Settings:
