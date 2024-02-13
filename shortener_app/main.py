@@ -1,13 +1,16 @@
 import secrets
 import validators
 
-from fastapi import FastAPI,Depends
+from fastapi import FastAPI,Depends,Request
+from fastapi.responses import RedirectResponse
 from typing import Annotated
 from sqlalchemy.orm import Session
 from .config import get_settings,Settings
-from .exceptions import raise_bad_request
-from . import schemas,models
+from .exceptions import raise_bad_request,raise_not_found
+from . import schemas,models,crud
 from .database import engine,SessionLocal
+from .keygen import create_random_key
+
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -34,16 +37,16 @@ def create_url(url:schemas.URLBase,db:Session = Depends(get_db)):
     if not validators.url(url.target_url):
         raise_bad_request(message="Your provided URL is not valid")
 
-    chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-    key = "".join(secrets.choice(chars) for _ in range(5))
-    secret_key = "".join(secrets.choice(chars) for _ in range(8))
-    db_url = models.URL(
-        target_url=url.target_url, key=key, secret_key=secret_key
-    )
-    db.add(db_url)
-    db.commit()
-    db.refresh(db_url)
-    db_url.url = key
-    db_url.admin_url = secret_key
-
+    db_url = crud.create_db_url(url,db)
+    db_url.url = db_url.key
+    db_url.admin_url = db_url.secret_key
     return db_url
+
+@app.get("/{url_key}")
+def forward_to_target_url(
+    url_key:str, request: Request, db:Session = Depends(get_db)
+):
+    url = db.query(models.URL).filter(models.URL.key == url_key,models.URL.is_active).first()
+    if url is None:
+        raise_not_found(message="URL not found")
+    return RedirectResponse(url.target_url)
